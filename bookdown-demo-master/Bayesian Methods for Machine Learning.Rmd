@@ -1,0 +1,146 @@
+# Bayesian Methods for Machine Learning
+
+## Week 1
+对于不确定性的理解，贝叶斯学派认为只要知道了一切信息，那么就不存在不确定性。对于数据和参数的理解，频率学派认为数据是随机的而参数是固定的，而贝叶斯学派则认为参数是随机的而数据是固定的。贝叶斯学派研究各种数据规模，但是频率学派主要研究数据量远大于特征数的情况。频率学派考虑最大似然估计，即：
+$$
+\hat{\theta}=argmax_\theta P(X|\theta)
+$$，而贝叶斯学派则最大化后验估计：
+$$
+P(\theta|X)=\frac{P(X|\theta)P(\theta)}{P(X)})
+$$
+
+
+对于预测的理解，贝叶斯学派对训练的理解如下：
+$$
+P\left(\theta | X_{\mathrm{tr}}, y_{\mathrm{tr}}\right)=\frac{P\left(y_{\mathrm{tr}} | X_{\mathrm{tr}}, \theta\right) P(\theta)}{P\left(y_{\mathrm{tr}} | X_{\mathrm{tr}}\right)}
+$$
+
+$$
+P\left(y_{\mathrm{ts}} | X_{\mathrm{ts}}, X_{\mathrm{tr}}, y_{\mathrm{tr}}\right)=\int P\left(y_{\mathrm{ts}} | X_{\mathrm{ts}}, \theta\right) P\left(\theta | X_{\mathrm{tr}}, y_{\mathrm{tr}}\right) d \theta
+$$
+，因此贝叶斯学派认为预测过程是所有可能参数的加权和。
+
+贝叶斯可以提供正则化的理解角度，即通过引入先验来引入正则化。贝叶斯也可以作为online learning的工具：
+$$
+P_{k}(\theta)=P\left(\theta | x_{k}\right)=\frac{P\left(x_{k} | \theta\right) P_{k-1}(\theta)}{P\left(x_{k}\right)}
+$$
+
+
+贝叶斯可以提供一个理解线性回归的方法：
+$$
+\begin{aligned}
+&P(w, y | X)=P(y | X, w) P(w)\\
+&P(y | w, X)=\mathcal{N}\left(y | w^{T} X, \sigma^{2} I\right)\\
+&P(w)=\mathcal{N}\left(w | 0, \gamma^{2} I\right)
+\end{aligned}
+$$
+
+采用最大化后验估计的方法
+$$
+P(w|y,X)=\frac{P(y,w|X)}{P(y|X)}=\frac{P(y|w,X)P(w)}{P(y|X)}
+$$
+两边同时取对数，可得：
+$$
+\begin{align}
+logP(y|X,w)+logP(w)&=log C_1exp(-\frac{1}{2}(y-w^Tx)^T[\sigma^2I]^{-1}(y-w^Tx))+log C_2 exp(-\frac{1}{2}w^T[\sigma^2I]^{-1}w)\\
+&=-\frac{1}{2}\|y-w^Tx\|^2-\frac{1}{2r^2}\|w\|^2
+\end{align}
+$$
+所以采用正态分布先验假设，会发现等价于增加了一个二范数正则项。而如果采用拉普拉斯分布先验假设的话，等价于增加了一个一范数正则项。
+
+
+## Analytical Inference
+Maximum a posteriori
+$$
+\theta_{\mathrm{MP}}=\arg \max _{\theta} \frac{P(X | \theta) P(\theta)}{P(X)}
+$$
+但是最大后验估计会有问题，比如先验的分布可能会无法保持。其次贝叶斯估计无法得到置信区间。（补充缺陷）
+
+共轭：先验分布是与似然函数是共轭的，如果先验分布和后验分布属于同一类分布。例如：
+$$
+\begin{array}{c}
+P(X|\theta)=\mathcal{N}\left(X | \theta, \sigma^{2}\right) \quad P(\theta)=\mathcal{N}\left(\theta | m, s^{2}\right) \\
+\prod^{N\left(\theta | a, b^{2}\right)} P(\theta | X)=\frac{P(X | \theta) P(\theta)}{P(X)}
+\end{array}
+$$
+$$
+\begin{aligned}
+&\Gamma(\gamma | a, b)=\frac{b^{a}}{\Gamma(a)} \gamma^{a-1} e^{-b \gamma}\\
+&\mathbb{E}[\gamma]=a / b\\
+&\operatorname{Mode}[\gamma]=\frac{a-1}{b}\\
+&\operatorname{Var}[\gamma]=a / b^{2}
+\end{aligned}
+$$
+
+Precision:$\gamma=\frac{1}{\sigma^2}$
+$$
+\begin{aligned}
+&\mathcal{N}\left(x | \mu, \sigma^{2}\right)=\frac{1}{\sqrt{2 \pi \sigma^{2}}} e^{-\frac{(x-\mu)^{2}}{2 \sigma^{2}}}\\
+&\mathcal{N}\left(x | \mu, \gamma^{-1}\right)=\frac{\sqrt{\gamma}}{\sqrt{2 \pi}} e^{-\gamma \frac{(x-\mu)^{2}}{2}}
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+&p(\gamma)=\Gamma(\gamma | a, b) \propto \gamma^{a-1} e^{-b \gamma}\\
+&p(\gamma | x) \propto p(x | \gamma) p(\gamma)\\
+&p(\gamma | x) \propto\left(\gamma^{\frac{1}{2}} e^{-\gamma \frac{(x-\mu)^{2}}{2}}\right) \cdot\left(\gamma^{a-1} e^{-b \gamma}\right)\\
+&p(\gamma | x) \propto \gamma^{\frac{1}{2}+a-1} e^{-\gamma\left(b+\frac{(x-\mu)^{2}}{2}\right)}\\
+&p(\gamma | x)=\Gamma\left(a+\frac{1}{2}, b+\frac{(x-\mu)^{2}}{2}\right)
+\end{aligned}
+$$
+所以如果参数是precison，对于似然函数是正态分布来说，采用gamma分布是共轭的。注意当参数是均值是，似然函数是正态分布可以采用正态分布的先验分布。
+
+对于伯努利分布，在这之前需要先介绍Beta分布：
+$$
+\begin{array}{c}
+B(x | a, b)=\frac{1}{B(a, b)} x^{a-1}(1-x)^{b-1} \\
+\mathbb{E} x=\frac{a}{a+b} \\
+\operatorname{Mode}[x]=\frac{a-1}{a+b-2} \\
+\operatorname{Var}[x]=\frac{a b}{(a+b)^{2}(a+b-1)}
+\end{array}
+$$
+其中
+$$
+\frac{1}{B(a,b)}=\frac{\Gamma(a+b)}{\Gamma(a) \Gamma(b)}
+$$
+采用Beta分布作为先验分布下，更新过程如下：
+$$
+\begin{aligned}
+&p(X | \theta)=\theta^{N_{1}}(1-\theta)^{N_{0}}\\
+&p(\theta)=B(\theta | a, b) \propto \theta^{a-1}(1-\theta)^{b-1}\\
+&p(\theta | X) \propto p(X | \theta) p(\theta)\\
+&p(\theta | X) \propto \theta^{N_{1}}(1-\theta)^{N_{0}} \cdot \theta^{a-1}(1-\theta)^{b-1}\\
+&p(\theta | X) \propto \theta^{N_{1}+a-1}(1-\theta)^{N_{0}+b-1}\\
+&p(\theta | X)=B\left(N_{1}+a, N_{0}+b\right)
+\end{aligned}
+$$
+
+问MAP结果的时候，就是问Mode=$\frac{a-1}{a+b-2}$。
+
+## Week2(Latent Variable Models)
+隐变量，顾名思义就是无法观测或者直接测量的随机变量。考虑我们要招聘一些实习生，根据他们的一些定量数据来判断是否邀请他们进行面试。但是数据中有缺失值，以及我们除了想预测他们的最终面试表现之外，还想要得到这种预测的自信度。
+
+### Probabilistic clustering
+有两种聚类方法，一种是硬聚类，即给每一个样本一个类别，另外一种是软聚类，即给每一个样本在每一种类别上的分布情况。只有软聚类的方法，增大类别数才可能不一定导致验证集上的单调表现。
+
+### Gaussian Mixture Model
+$$
+\begin{aligned}
+p(x | \theta)=& \pi_{1} \mathcal{N}\left(x | \mu_{1}, \Sigma_{1}\right)+\pi_{2} \mathcal{N}\left(x | \mu_{2}, \Sigma_{2}\right) \\
+&+\pi_{3} \mathcal{N}\left(x | \mu_{3}, \Sigma_{3}\right) \\
+\theta=\left\{\pi_{1}, \pi_{2},\right.&\left.\pi_{3}, \mu_{1}, \mu_{2}, \mu_{3}, \Sigma_{1}, \Sigma_{2}, \Sigma_{3}\right\}
+\end{aligned}
+$$
+因此使用MAP方法训练GMM过程如下：
+$$
+\begin{align}
+\max _{\theta} \quad p(X | \theta)&=\prod_{i=1}^{N} p\left(x_{i} | \theta\right)\\
+&=\prod_{i=1}^{N}\left(\pi_{1} \mathcal{N}\left(x_{i} | \mu_{1}, \Sigma_{1}\right)+\ldots\right)\\
+\end{align}\\
+\text { subject to } \pi_{1}+\pi_{2}+\pi_{3}=1 ; \pi_{k} \geq 0 ; k=1,2,3\\
+\Sigma_{k} \succ 0
+$$
+以上的优化问题是比较难的，原因是来自最后的约束，即确保协方差矩阵正定，因此不能直接使用梯度下降法。因此需要引入特殊的算法，EM算法。
+
+
