@@ -143,4 +143,43 @@ $$
 $$
 以上的优化问题是比较难的，原因是来自最后的约束，即确保协方差矩阵正定，因此不能直接使用梯度下降法。因此需要引入特殊的算法，EM算法。
 
+为了求解GMM模型，需要引入隐变量t：
+$$
+\begin{align}
+p(t=c|\theta)&=\pi_c\\
+p(x|t=c,\theta)&=N(x|\mu_c,\Sigma_c)\\
+p(x|\theta)&=\sum_{c=1}^3p(x|t=c,\theta)p(t=c|\theta)
+\end{align}
+$$
 
+如果隐变量t（种类）是已知的，那么可以容易估计不同类别的均值和方差：
+$$
+\mu_j=\frac{\sum_i p(t_i=j|x_i,\theta)x_i}{p(t_i=j|x_i,\theta)},\quad \sigma^2_j=\frac{\sum_i p(t_i=j|x_i,\theta)(x_i-\mu_j)^2}{p(t_i=j|x_i,\theta)}
+$$
+但是当我们不知道隐变量的时候，如果我们知道参数，我们可以根据贝叶斯估计后验：
+$$
+p(t=j|x,\theta)=\frac{p(x|t=j,\theta)p(t=j|\theta)}{Z}
+$$
+
+这就导致了一个鸡生蛋的困境，如果我们知道了隐变量，我们可以轻易估计参数；如果我们知道参数，我们也可以轻易估计隐变量。因此可以使用EM算法，即先随机化分布的参数，得到每一个样本属于不同类别的概率；之后根据概率更新分布的参数估计，重复上述过程直到收敛。对于不同的初始化，选择可以得到最大的似然对应的初始化结果。
+
+### EM Algorithm
+对concave函数而言，Jensen's inequality:
+$$
+f(\mathbb{E}_{p(t)}t)\geq \mathbb{E}_{p(t)}f(t)
+$$
+Kullback-leibler divergence来衡量两个分布的差异：
+$$
+KL(q\|p)=\int q(x)log\frac{q(x)}{p(x)}dx
+$$
+KL散度的性质：
+1. $KL(q||p)\neq KL(p||q)$
+2. $KL(q||q)=0$
+3. $KL(q||p)\geq 0$
+第三点的证明：
+$$
+\begin{align}
+-KL(q||p)&=\mathbb{E}_q(-log\frac{q}{p})=\mathbb{E}_q(log \frac{p}{q})\\
+&=\leq log(\mathbb{E}_q \frac{p}{q})=log \int q(x)\frac{p(x)}{q(x)}dx=0
+\end{align}
+$$
