@@ -1,0 +1,168 @@
+# Coursera: Improving Deep Neural Networks: Hyperparameter tuning, Regularization and Optimization
+
+```{r}
+library(reticulate)
+use_python("/Applications/anaconda3/bin/python")
+```
+
+## Week 1: Train/Dev/Test sets
+一般来说可以使用60%,20%和20%的比例来分割。但是当数据量足够大的时候，dev set和test set比例会减小至98%/1%/1%,因为后面两个集仅仅需要满足评估即可。注意test sets不可以被纳入training和evaluation的过程。注意test set是用来提供无偏的估计，所以在某些情况下如果不需要无偏估计，可以不使用test set。
+
+分析Bias和Variance，需要考虑贝叶斯error(?)。
+
+过程：
+High Bias的时候，考虑增大网络、延长训练时间，或者改变网络结构。当将Bias降低到可接受的程度，就需要观察是否存在High Variance，如果存在，则可以考虑增多数据或者正则化或者改变网络结构。事实上在合适的正则化手段下，扩大网络结构几乎可以做到降低偏差而不显著增大方差，而增多训练数据则可以减小方差而不增大偏差。
+
+在正则化的过程中，我们一般不将偏直项纳入正则化范围，因为一般来说整个效果不显著。在l2正则化的过程中（虽然正则化是矩阵的Frobenius范数），损失函数为：
+$$
+J(w^{[1]},b^{[1]},\cdots,w^{[l]},b^{[l]})=\frac{1}{m}\sum_{i=1}^m l(\hat{y}^{(i)},y^{(i)})+\frac{\lambda}{2m}\sum_{l=1}^L\|w^{[l]}\|_F^2
+$$
+求导之后发现梯度变为了$dw^{[l]}=+\frac{\lambda}{m}w^{[l]}$，因此梯度下降公式变为：
+$$
+w^{[l]}=(1-\frac{\alpha \lambda}{m})w^{[l]}w^{[l]}-\alpha 梯度
+$$
+Dropout Implement：
+```{python}
+import numpy as np
+a3=np.array([[1,2,3],[4,5,3]])
+keep_prob=0.2
+d3=np.random.rand(a3.shape[0],a3.shape[1])<keep_prob
+a3=np.multiply(a3,d3)
+a3=a3/keep_prob
+```
+主要最后一步是invert dropout，这对于保持训练过程很重要。在测试过程中不实用dropout。
+
+在调试的过程中可以先取消dropout，确保损失函数定义正确（观察tensorboard的损失函数单调下降）后再启用dropout。
+
+其他减轻过拟合的方法包括数据扩增，early stopping。
+
+对输入值进行normalization可以加速训练过程。
+
+为了避免梯度下降或者梯度爆炸的情况，如果使用relu激活函数的话，最好使用如下方法来初始化:
+```{python}
+input_dim=32
+output_dim=12
+w=np.random.randn(input_dim,output_dim)*np.sqrt(2/input_dim)
+```
+，即确保$Var(w)=\frac{2}{n}$。但是使用tanh激活函数的话，最好使用如下方法，即确保$Var(w)=\frac{1}{n}$，这被称为Xavier初始化方法。
+```{python}
+input_dim=32
+output_dim=12
+w=np.random.randn(input_dim,output_dim)*np.sqrt(1/input_dim)
+```
+还有论文通过理论推导建议使用$\frac{2}{input-dim+output-dim}$。
+
+检查梯度的时候，可以将所有的参数组合成一个大的参数$\theta$，然后分别计算
+$$d\theta_{approx}[i]=\frac{J(\cdots,\theta_i+\epsilon,\cdots)-J(\cdots,\theta_i-\epsilon,\cdots)}{2\epsilon}$$
+跟我们得到的理论值进行对比，判定标准为：
+$$
+\frac{\|d\theta_{approx}-d\theta\|_2}{\|d\theta_{approx}\|+\|\theta\|_2}<1e-7
+$$
+
+## Week 2
+### Mini-batch gradient descent
+小于2000数据量的数据集则可以直接使用gradient descent，但是当数据集足够大的时候，一般使用64，128，256等batch-size。
+
+Bias correction：当使用指数滑动平均的时候，$v_t=\beta v_{t-1}+(1-\beta)\theta_t$，可以再除以一个小于1的数，即$\frac{v_t}{1-\beta^t}$来修正初始的估计偏差。
+
+RMSprop:
+$$
+S_{dw}=\beta S_{dw}+(1-\beta)dw^2\\
+w=w-\alpha \frac{dw}{\sqrt{S_{dw}}}
+$$
+
+**How does Adam work?**
+1. It calculates an exponentially weighted average of past gradients, and stores it in variables $v$ (before bias correction) and $v^{corrected}$ (with bias correction). 
+2. It calculates an exponentially weighted average of the squares of the past gradients, and  stores it in variables $s$ (before bias correction) and $s^{corrected}$ (with bias correction). 
+3. It updates parameters in a direction based on combining information from "1" and "2".
+
+The update rule is, for $l = 1, ..., L$: 
+
+$$\begin{cases}
+v_{dW^{[l]}} = \beta_1 v_{dW^{[l]}} + (1 - \beta_1) \frac{\partial \mathcal{J} }{ \partial W^{[l]} } \\
+v^{corrected}_{dW^{[l]}} = \frac{v_{dW^{[l]}}}{1 - (\beta_1)^t} \\
+s_{dW^{[l]}} = \beta_2 s_{dW^{[l]}} + (1 - \beta_2) (\frac{\partial \mathcal{J} }{\partial W^{[l]} })^2 \\
+s^{corrected}_{dW^{[l]}} = \frac{s_{dW^{[l]}}}{1 - (\beta_2)^t} \\
+W^{[l]} = W^{[l]} - \alpha \frac{v^{corrected}_{dW^{[l]}}}{\sqrt{s^{corrected}_{dW^{[l]}}} + \varepsilon}
+\end{cases}$$
+where:
+- t counts the number of steps taken of Adam 
+- L is the number of layers
+- $\beta_1$ and $\beta_2$ are hyperparameters that control the two exponentially weighted averages. 
+- $\alpha$ is the learning rate
+- $\varepsilon$ is a very small number to avoid dividing by zero
+
+Learning rate decay:
+$$
+\alpha=\frac{1}{1+decay-rate*epoch-num}\\
+\alpha=0.95^{epoch-num}\alpha_0\\
+\alpha=\frac{k}{\sqrt{epoch-num}}\alpha_0
+$$
+但是这个的优先级较低。
+
+## Week 3
+### Params Tuning
+学习率是最重要的参数，Momentum Term, Mini-batch Size, Hidden units是第二重要的参数，层的数量、Learning Rate Decay是第三重要。尝试不同的超参数，但是不要使用grid的方法，即不要在一个矩形中等距采样，取而代之应该是在一个矩阵中随机取样，因为这样能够搜索到更多的取值。
+另外一种采样方法是Coarse to fine方法，即先大概取样，发现有比较好的值后在那个取值附近继续进行更加细致的采样。
+
+超参数的取样方式应该是采用Log级别，即：
+```
+r=-4*np.random.rand()
+alpha=10**r
+```
+
+对于exponentially weighted averages的采样
+对于动量参数$\beta=0.9,\cdots,0.999$，采用之前的方法，需要关注的是$1-\beta=0.001,\cdots, 0.1$
+
+
+当我们没有足够的算力来训练，可以采用Babysitting方法，即始终训练一个模型，但是间隔一个时间就观察一次表现，并且做出动态调整，或者版本返回为历史版本。
+
+### Batch Norm
+给定隐藏元$z^{(1)},z^{(2)},\cdots,z^{(1)}$（注意在神经元中，我们记号为$x\rightarrow$线性得到$z^{[1]}\rightarrow$,再进行Batch-Norm得到$\tilde{z}^{[1]}$，再进行激活函数为$a^{[1]}=g(\tilde{z}^{[1]})$。对于下一层而言，$z^{[2]}=a^{[1]}$。以此类推），计算
+$$
+\mu=\frac{1}{m}\sum_i z^{(i)}\\
+\sigma^2=\frac{1}{m}\sum_i (z_i-\mu)^2\\
+z^{(i)}_{norm}=\frac{z^{(i)}-\mu}{\sqrt{\sigma^2+\epsilon}}\\
+\tilde{z}^{(i)}=\gamma z^{(i)}_{norm}+\beta
+$$
+在接下来的隐藏层中，我们使用$\tilde{z}^{[l](i)}$代替$z^{[l](i)}$。
+使用BN的时候，在线性组合的时候我们其实可以直接令$b=0$因此常数项可以被BN中的$\beta$重设。
+
+BN起效的原因，是因为当我们训练一个比较深的网络的时候，前面的隐藏层的权重随着梯度下降改变的时候，事实上前面的数据输入分布也会随之改变，这会导致Covariate Shift，也就是需要学习的映射也会随之改变。BN的另外一个作用是正则化，因为一般网络的训练都是使用mini-batch方式，batch计算出来的均值和方差具有抽样误差，因此可以避免下游的隐藏层过于依赖某一个上游神经元。因此当Batch Size增大时，使用BN的regulaization效果会变弱。
+
+在测试的时候，理论上来说可以用训练好的模型来运行一次全部数据来获得每一层的$\mu^{[l]}$和$\sigma^{2[l]}$，但是这样会耗费额外的时间，因此在实际操作中使用指数平滑的方法来利用训练过程中的每一次Mini Batch得到的$\mu$和$\sigma$来完成估计。 average方式来估计均值和方差。
+
+
+### Multi-class Classification
+在多分类模型中，基于单个样本的损失函数采用：
+$$
+l(\hat{y},y)=-\sum_{j=1}^my_j log \hat{y}_j
+$$
+而在整个样本集上的损失函数为；
+$$
+J(w^{[1]},b^{[1]},\cdots)=\frac{1}{m}\sum_{j=1}^m l(\hat{y}^{(i)},y^{(i)})
+$$
+### 深度学习框架
+选择框架的标准：
+1. 编程的容易性，包括编写模型和上线部署
+2. 运行速度
+3. 是否开源
+
+tensorflow简单介绍：
+```{python}
+import numpy as np
+import tensorflow as tf
+
+w=tf.Variable(0,dtype=tf.float32)
+cost=w**2+tf.multiply(-10.,w)+25
+train=tf.train.GradientDescentOptimizer(0.01).minimize(cost)
+
+init=tf.global_variables_initializer()
+session=tf.Session()
+session.run(init)
+print('init',session.run(w))
+
+
+session.run(train)
+```
+

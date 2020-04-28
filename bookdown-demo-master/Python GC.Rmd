@@ -1,0 +1,15 @@
+# 并行化计算
+
+Joblib
+
+```python
+start = time.time()
+# n_jobs is the number of parallel jobs
+Parallel(n_jobs=2)(delayed(my_fun)(i) for i in range(num))
+end = time.time()
+print('{:.4f} s'.format(end-start))
+```
+
+
+
+

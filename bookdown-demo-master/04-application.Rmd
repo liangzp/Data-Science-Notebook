@@ -1,0 +1,110 @@
+# Workflow
+
+[参考资料](https://www.jianshu.com/p/6ef0a8220e85)
+
+## 项目管理
+```
+|____makefile
+|____texheader.tex
+|____makePDF
+|____input_rw.csv
+|____input_cn.csv
+|____baseline_sequential
+| |____input
+| | |____input_rw.csv
+| | |____input_cn.csv
+| |____output
+| | |____done_create_folders_and_symlinks.txt
+| |____src
+| | |____makefile
+| | |____create_folders_and_symlinks.sh
+| | |____baseline_sequential.m
+```
+最外层仅仅有两个输入的csv文件和makefile。
+
+### 外层Makefile
+其中makefile的内容如下：
+```
+#############################################################
+#
+#############################################################
+task_baseline_sequential=baseline_sequential/src
+task_make_PDF=makePDF/src
+
+all:
+	$(MAKE) -C $(task_baseline_sequential)
+	$(MAKE) -C $(task_make_PDF)
+
+.PHONY:clean
+clean:
+	-rm baseline_sequential/output/done_create_folders_and_symlinks.txt \
+	makePDF/output/done_create_folders_and_symlinks.txt
+```
+
+$(MAKE) -C 则是cd到后面的目录中执行该目录下的makefile，是一种递归运行方法。每一个子目录下的src是资源文件，即除了数据之外。
+
+### 子目录下的makefile
+子目录下的makefile如下：
+```
+#############################
+#    INPUT
+#############################
+inputs= \
+	../input/input_cn.csv \
+	../input/input_rw.csv
+
+#############################
+#    OUTPUT
+#############################
+folders_and_symlinks=../output/done_create_folders_and_symlinks.txt
+
+eqm=\
+	../output/baseline_eqm.mat
+
+figs=\
+	../output/fig4.png
+
+#tabs=\
+
+
+output_all=$(eqm)
+output_all+=$(figs)
+#output_all+=$(tabs)
+
+#############################
+#    WORK SESSION
+#############################
+
+all: $(folders_and_symlinks) $(output_all)
+
+$(folders_and_symlinks): create_folders_and_symlinks.sh
+	-bash create_folders_and_symlinks.sh
+	echo "">../output/done_create_folders_and_symlinks.txt
+
+$(output_all): $(inputs) baseline_sequential.m
+	-matlab -nosplash -nodisplay -nodesktop -batch "run('baseline_sequential.m');exit;"
+```
+all用的是多目标语法，即这个工作先生成目录和symlinkes，然后再执行matlab程序。
+
+
+### 子目录下src的.sh文件
+而其中create_folders_and_symlinks.sh的内容如下：
+```
+#!bin/bash
+##############################################
+#       INPUT FOLDER
+##############################################
+mkdir -p ../input
+
+##############################################
+##############################################
+mkdir -p ../output
+
+##############################################
+#       SYMLINKS
+##############################################
+```
+mkdir -p 即创建对应的目录树，即比如，/output/tabs，如果没有-p output必须已经存在，如果加了-p，output不存在，为了创建tabs就会先创建个output。
+ln -s 则是建立一个从A指向B的软链接。
+### 将程序与PDF直接端对端链接起来
+

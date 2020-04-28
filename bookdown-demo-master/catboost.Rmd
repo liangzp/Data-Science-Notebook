@@ -1,0 +1,95 @@
+# Catboost算法简介及其较传统梯度提升算法之优势
+
+## 简要介绍
+   Catboost是一种改进的梯度提升算法，其对损失函数的优化方法仍是梯度提升，在这方面本质上跟传统的梯度提升算法（Xgboost、GBDT）并无差别。它主要识别和解决了传统梯度提升算法中将类别特征变量（Categorical features）转化成数值特征变量（Numerical features）时产生的条件分布偏移（Conditional shift），以及训练集中梯度函数与输入向量的相关性导致的预测偏移（Prediction shift）。这两种偏移现象的原因都是真实值泄露（Target leakage）。这两种现象在基于小数据集以及存在类别特征变量的数据集的机器学习中表现得更加显著，因此在这两类数据集中运用Catboost算法的效果明显比其他梯度提升算法更优异。下面将会介绍这两种偏移的存在性、成因以及对应的Catboost解决方法。
+
+## 条件分布偏移
+### 符号说明
+假设数据集包括$D=\{(\mathbf{x_k},y_k)\}_{k=1,..,n}$，其中$\mathbf{x_k}=(x_k^1,\cdots,x_k^m)$是一个具有m个特征的随机样本向量，而$y_k\in \mathbb{R}$则是目标值，可以是01变量或者是数值变量
+ 
+
+### 类别特征变量转化之Greedy TS法
+   类别特征变量是一些互相之间无法比较大小的特征变量，如所属城市，用户ID等。这样的变量在机器学习中很常见，而我们需要将其转化成数值特征变量便于后续学习。一种较为传统的转化方法是One-hot encoding，即为该变量的每个类别都新增一个二值变量来代表该输入向量x是否属于这个类别，但是该方法在类别数较多时（用户ID）会使得输入向量x的维数相当高。而另一种很流行的方法是Greedy TS法（Xgboost、GBDT均使用该方法），即用真实值统计量（Target statistic, TS in short）来代替类别特征变量。Greedy TS即为下式等式右端项。
+   $$
+\hat{x}_{k}^{i}=\frac{\sum_{j=1}^{n} \mathbb{1}_{\left\{x_{j}^{i}=x_{k}^{i}\right\}} \cdot y_{j}+a p}{\sum_{j=1}^{n} \mathbb{1}_{\left\{x_{j}^{i}=x_{k}^{i}\right\}}+a}, \quad \mathrm{k}=1,2, \ldots .
+$$
+其中a>0是预先给定的参数，p是训练集中被解释变量（Target value）y的平均值。在等式中添加a和p是为了降低数据集中可能出现的某一类别所对应的条目数太少造成的TS统计量的过大波动带来的不可靠性。Greedy TS法中的TS就是在训练集中对条件期望 的估计。用例子简单理解TS，假设输入向量x的第i个变量在训练集中取值范围是 I={猫，狗，猪，羊}，而假设训练集第k个样本对应的是猫，那么即对训练集里是“猫”的那些样本的被解释变量y取平均，将该平均值经a，p平滑处理后得到 ，用来代替“猫”成为第k个样本的第i个输入变量。
+
+### Greedy TS法的缺陷
+   Catboost团队发现这种Greedy TS法对$\hat{x}_k^i$ 的赋值会产生真实值泄露的问题。但是在Catboost论文中并未对真实值泄露（Target leakage）进行定义或者给出其具体内涵。下面我将按照自己的理解给出该泄露的具体含义。
+   接下来将以例子说明真实值泄露带来的无意义学习现象。设想以下极端训练集，其类别特征变量的各个类别均只对应一个样本条目，那么对于任意的k，（1）式变成$\hat{x}_k^i=G(y_k)=\frac{y_k+ap}{1+a}$ ，$\hat{x}_k^i$完全由$y_k$ 决定。不妨设被解释变量y是0-1变量。那么机器学习的结果将是设置阈值$t=\frac{0.5+ap}{1+a}$（此处的0.5可以是任何介于0和1之间的实数，取0.5仅为了方便说明），对于任意输入向量$\mathbf{x_k}$，仅判断第i维变量$\hat{x}_k^i$ 与阈值t的大小关系（而忽略其他维变量）。若$\hat{x}_k^i >t$，则预测y的值是1；否则预测y的值是0。那么这样的模型将正确分类训练集上所有样本。然而，当任意输入一个训练集外的向量X时，为了方便说明问题，我们不妨假设Xi这个类别在训练集中没有出现，那么根据（1）式，Xi将被转化为p。根据上述模型，则将只判断p与t的关系。若p>t，那么预测对应y值是，否则是0。而这里的p是训练集中y的平均值，为与该向量X无关的常数。那么显然该模型是没有任何预测价值的。
+   从上面的分析可以看到，真实值泄露（Target leakage）的意思是，Greedy TS法在对训练集样本类别特征变量的数值转化过程中（即(1)式），将样本的真实值（Target Vaule）信息“泄露（leak）”给了输入向量，使得输入向量包含了额外的关于真实值的信息。此处的“额外的”是为了区别于输入向量在固有属性上本身就含有的真实值的信息。这导致是，算法在样本集学习到的是（固有信息+额外信息）→真实值之间的函数关系F。（当做到完美时，真实值=F(固有信息+额外信息)）
+  现在我们来考察一下这个F在训练集外的数据的表现。设想我们真的把F用于预测，那么我们所拥有的只有输入变量x，并没有其对应的真实值y。这意味着对于训练集外数据我们仅有固有信息而缺乏额外信息，因为我们没有真实值y，就不能通过像训练集样本一样利用（1）式将真实值的信息“泄露”给x。那么F(固有信息)与真实值之间将一定存在偏差，即泛化偏差。
+   这种真实值泄露带来的泛化偏差在训练集越小时表现得越显著，因为此时各个类别对应的样本条目数将会很少，最极端情况下则出现上述例子所假设的在训练集中某类别对应样本条目仅有一条。此时额外信息将变得十分直接而确凿（$\hat{x}_k^i >t=G(y_k)=\frac{y_k+ap}{1+a}$ ）。这样就会产生额外信息把固有信息掩盖掉，即如上例所指出F只学习额外信息而忽略固有信息，只判断输入向量的第i维变量，此时的F将毫无泛化能力。
+   真实值泄露所带来的问题用数学语言来描述就是$\mathbb{E}\left(\hat{x}^{i} | y=v\right) \neq \mathbb{E}\left(\hat{x}_{k}^{i} | y_{k}=v\right)$
+其中$\left(\mathbf{x}_{k}, y_{k}\right)$是训练集内样本，$\left(\hat{x}^{i} | y\right)$则是训练集外数据。
+
+### Catboost提出的解决算法 Ordered TS
+       由上面的分析可得，要解决这个真实值泄露的问题，就要防止生成的 包含对应真实值 的信息。即要满足
+ $$
+\hat{x}_{k}^{i}=\frac{\sum_{\mathbf{x}_{j} \in \mathcal{D}_{k}} \mathbb{1}_{\left\{x_{j}^{i}=x_{k}^{i}\right\}} \cdot y_{j}+a p}{\sum_{\mathbf{x}_{j} \in \mathcal{D}_{k}} \mathbb{1}_{\left\{x_{j}^{i}=x_{k}^{i}\right\}}+a}
+$$
+ 其中$\mathcal{D}_{k} \subset \mathcal{D} \backslash\left\{\mathbf{x}_{k}\right\}$	  
+      而Catboost团队证明了若取$\mathcal{D}_{k} \subset \mathcal{D} \backslash\left\{\mathbf{x}_{k}\right\}$那么也会产生真实值泄露的问题。
+      他们采取的是Ordered TS的方法，即对（2）式，取$\mathcal{D}_{k}=\left\{\mathbf{x}_{j}: \sigma(j)<\sigma(k)\right\}$
+其中σ是对1~n这n个数随机生成的序列，用来对训练集n个样本进行随机排序。可以证明Ordered TS法不会产生真实值泄露问题。
+
+##预测偏移
+### 传统梯度提升算法的预测偏移问题
+       在梯度提升算法中，迭代第t步的目标都是生成一个弱分类器，该弱分类器的目标便是产生一个$h^t(x)$来拟合$-g^t(x,y)$，其中$g^{t}(\mathbf{x}, y):=\left.\frac{\partial L(y, s)}{\partial s}\right|_{s=F^{t-1}(\mathbf{x})}$ ,即为损失函数的负梯度在当前模型的值。特别地，当损失函数定义为均方误差损失函数时，那么将有
+$$
+h^{t}=\underset{h \in H}{\arg \min } \mathbb{E}\left(-g^{t}(\mathbf{x}, y)-h(\mathbf{x})\right)^{2}
+$$
+而对于上述条件期望E，传统的梯度提升算法是直接取训练集所有样本的平均来估计。即把上式化作
+$$
+h^{t}=\underset{h \in H}{\arg \min } \frac{1}{n} \sum_{k=1}^{n}\left(-g^{t}\left(\mathbf{x}_{k}, y_{k}\right)-h\left(\mathbf{x}_{k}\right)\right)^{2}
+$$     
+然而，Catboost团队发现了以下偏移链的存在：① $g^{t}\left(\mathrm{x}_{k}, y_{k}\right)\left|\mathrm{x}_{k} \neq g^{t}(\mathrm{x}, y)\right| \mathrm{x}$，与条件分布偏移相似，$\left(\mathbf{x}_{k}, y_{k}\right)$ 是训练集内样本，(x,y)则是训练集外数据。②因此导致（4）式 $h^t$其实是对（3）式 $h^t$的有偏估计。③由于最终模型 $F^t$由一个个h累加而成，所以基于训练集习得模型 是对真实函数 的有偏估计。预测偏移因此得名。
+
+### 预测偏移的原因仍是真实值泄露
+       此处真实值泄露原理与上述条件分布偏移中真实值泄露的原理本质上一样，不过更为影响机制更为间接和抽象。在条件分布偏移中，$\mathbb{E}\left(\hat{x}^{i} | y=v\right) \neq \mathbb{E}\left(\hat{x}_{k}^{i} | y_{k}=v\right)$的原因是在训练集中$y_k$的取值能对$\hat{x}^i_k$ 的值产生额外的影响，在训练集外则不然（事实上事先根本不知道y的取值）。而在预测偏移中，$g^{t}\left(\mathrm{x}_{k}, y_{k}\right)\left|\mathrm{x}_{k} \neq g^{t}(\mathrm{x}, y)\right| \mathrm{x}$的原因也类似，由于$g^{t}(\mathbf{x}, y):=\left.\frac{\partial L(y, s)}{\partial s}\right|_{s=F^{t-1}(\mathbf{x})}$，而$F^{t-1}(\mathbf{x})$又是基于整个训练集的数据（当然$(x_k,y_k)$也包含在内）习得的。因此$(x_k,y_k)$的取值会对函数 $g^t(\cdot,\cdot)$产生影响，所以会对$g^{t}\left(\mathrm{x}_{k}, y_{k}\right)$ 产生额外的影响。而这种额外的影响是训练集外的数据所不能产生的，因此会造成上述偏移链现象。同样地，当训练集很小时，该偏移现象更严重，因为此时$\left(\mathbf{x}_{k}, y_{k}\right)$ 在整个训练集中所占分量更重，对$g^{t}\left(\mathrm{x}_{k}, y_{k}\right)$产生的额外影响也更大。
+
+### Catboost提出的解决算法 Ordered boosting
+        Catboost团队提出并证明了一个定理：要想使得习得模型$F^t$与真实函数 的预测偏差高阶无穷小，则每次迭代生成弱学习器所用的样本集必须相互独立。意思就是说，现在的目标是要让上述偏移链现象消失，那么我们必须从第①环入手解决。即是要使得 $(x_k,y_k)$的取值不能对函数$g^t(\cdot,\cdot)$产生影响，这就要求用于学习得到 的数据集不能包含$(x_k,y_k)$。注意到$F^{t-1}(x)$ 是由之前t-1个$h(x)$累加而成，因此之前t-1次迭代生成弱学习器所基于的数据集都不能包含$(x_k,y_k)$。也就是说如果在第t次迭代使用的数据集中包含$(x_k,y_k)$ ，那么前面t-1次迭代数据集中都不能包含它。
+        既然形成原因本质相同，那么预测偏移现象的解决思路与条件分布转移的相似。大概来说，都是生成随机序列σ将训练集打乱，在每一次迭代中，都会生成n-1个辅助学习器（下图中用M表示），M与F一样，是由前面习得的弱学习器的叠加。Ordered boosting的核心就是利用$M_(σ(k)-1)^(t-1)$代替了$F^(t-1)$。
+ 如此类推便可以实现上述的打破偏移链。以下是Ordered boosting的伪算法：
+ 
+ $$
+\begin{array}{l}
+\text { Algorithm 1: Ordered boosting } \\
+\text { input : }\left\{\left(\mathrm{x}_{k}, y_{k}\right)\right\}_{k=1}^{n}, I ; \\
+\sigma \leftarrow \text { random permutation of }[1, n] \\
+M_{i} \leftarrow 0 \text { for } i=1 . . n \\
+\text { for } t \leftarrow 1 \text { to } I \text { do } \\
+\text { for } i \leftarrow 1 \text { to } n \text { do } \\
+\qquad \begin{aligned}
+\left\lfloor r_{i} \leftarrow y_{i}-M_{\sigma(i)-1}\left(\mathrm{x}_{i}\right)\right.\\
+\text { for } i \leftarrow 1 \text { to } n \text { do } \\
+& | \begin{array}{c}
+\Delta M \leftarrow \\
+\text {LearnModel}\left(\left(\mathrm{x}_{j}, r_{j}\right):\right. \\
+\sigma(j) \leq i) \\
+M_{i} \leftarrow M_{i}+\Delta M
+\end{array} \\
+\text { return } M_{n} \\
+\hline
+\end{aligned}
+\end{array}
+$$
+4. Catboost算法的实验结果以及与传统梯度学习算法的比较
+         以下“Adult”和“Amazon”等均是著名的机器学习任务。
+         首先是Ordered TS与Greedy TS等TS算法的比较，正的百分比值代表损失函数的值相比之下小多少。可见在大多数数据集中Ordered TS都是明显的最优选择。
+ 
+5.总结
+        Catboost相比于其他梯度提升学习算法，它识别并解决了类型特征变量的数值转化方法导致的条件期望偏移问题以及训练集中梯度函数与输入向量的相关性导致的预测偏移问题。而上述两个问题在小数据集以及涉及到类型特征变量转化的情况下表现得更加显著，因此在这两种情况下，Catboost算法具有其突出的优异性。此外，Catboost识别出来的这两个问题也给了我们启示：在机器学习中，若关于输入向量和真实值的条件期望E_(Y｜X)或E_(X｜Y)在训练集和样本集中不一致时，就很有可能出现泛化偏差。
+
+6.参考文献
+[1] CatBoost: unbiased boosting with categorical features  
+https://arxiv.org/pdf/1706.09516.pdf
+[2] CatBoost: gradient boosting with categorical features support
+https://arxiv.org/pdf/1810.11363.pdf
+[3] A Preprocessing Scheme for High-Cardinality Categorical Attributes in Classification and Prediction Problems 
+http://59.80.44.44/delivery.acm.org/10.1145/510000/507538/p27-micci-barreca.pdf?ip=58.249.112.92&id=507538&acc=ACTIVE%20SERVICE&key=BF85BBA5741FDC6E%2E3D07CFA6C3F555EA%2E4D4702B0C3E38B35%2E4D4702B0C3E38B35&__acm__=1554391822_822e68195860a9a1d947beeef3017dd5
+
+
+

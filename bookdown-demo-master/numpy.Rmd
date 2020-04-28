@@ -1,0 +1,11 @@
+# Numpy
+
++ nanmean
++ full
++ column_stack
++ tile np.tile(A,(2,3))将A按照2*3的网格填充
+
+
+
+
+
