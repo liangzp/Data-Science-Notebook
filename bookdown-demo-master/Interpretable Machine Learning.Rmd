@@ -1,4 +1,26 @@
 # 机器学习的可解释性
 
 ## Shapley Values
-Shapley Values是
+在线性模型中，如：
+$$
+\hat{f}(x)=\beta_{0}+\beta_{1} x_{1}+\ldots+\beta_{p} x_{p}
+$$
+而第j个特征的贡献为：
+$$
+\phi_{j}(\hat{f})=\beta_{j} x_{j}-E\left(\beta_{j} X_{j}\right)=\beta_{j} x_{j}-\beta_{j} E\left(X_{j}\right)
+$$
+注意，特征的贡献指的是偏离均值的部分。下面来检验这样的定义是否是良好定义：
+$$
+\begin{aligned}
+\sum_{j=1}^{p} \phi_{j}(\hat{f}) &=\sum_{j=1}^{p}\left(\beta_{j} x_{j}-E\left(\beta_{j} X_{j}\right)\right) \\
+&=\left(\beta_{0}+\sum_{j=1}^{p} \beta_{j} x_{j}\right)-\left(\beta_{0}+\sum_{j=1}^{p} E\left(\beta_{j} X_{j}\right)\right) \\
+&=\hat{f}(x)-E(\hat{f}(X))
+\end{aligned}
+$$
+可以看到，把所有特征的贡献加和，就是预测值与预测均值的偏差，因此是良好的。但是如何将该想法推广到一般的模型呢？这就需要引入The Shapley Value了。
+
+The Shapley Value是通过在玩家集合S上定义集合价值函数计算得出的，第j个特征的计算公式为：
+$$
+\phi_{j}(v a l)=\sum_{S \subseteq\left\{x_{1}, \ldots, x_{p}\right\} \backslash\left\{x_{j}\right\}} \frac{|S| !(p-|S|-1) !}{p !}\left(\operatorname{val}\left(S \cup\left\{x_{j}\right\}\right)-\operatorname{val}(S)\right)
+$$
+
