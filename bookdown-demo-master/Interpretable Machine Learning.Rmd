@@ -1,6 +1,10 @@
 # 机器学习的可解释性
 
 ## Shapley Values
+
+[Shapley Values](https://christophm.github.io/interpretable-ml-book/shapley.html)
+
+### 引入
 在线性模型中，如：
 $$
 \hat{f}(x)=\beta_{0}+\beta_{1} x_{1}+\ldots+\beta_{p} x_{p}
@@ -19,8 +23,53 @@ $$
 $$
 可以看到，把所有特征的贡献加和，就是预测值与预测均值的偏差，因此是良好的。但是如何将该想法推广到一般的模型呢？这就需要引入The Shapley Value了。
 
-The Shapley Value是通过在玩家集合S上定义集合价值函数计算得出的，第j个特征的计算公式为：
+### The Shapley Value是通过在玩家集合S上定义集合价值函数计算得出的，第j个特征的计算公式为：
 $$
 \phi_{j}(v a l)=\sum_{S \subseteq\left\{x_{1}, \ldots, x_{p}\right\} \backslash\left\{x_{j}\right\}} \frac{|S| !(p-|S|-1) !}{p !}\left(\operatorname{val}\left(S \cup\left\{x_{j}\right\}\right)-\operatorname{val}(S)\right)
 $$
+即所有可能的“新加入$x_j$”所带来的边际贡献的加权和。而$val_x(S)$则是使用子集S来作出的估计准确度。具体计算公式如下：
+$$
+\operatorname{val}_{x}(S)=\int \hat{f}\left(x_{1}, \ldots, x_{p}\right) d \mathbb{P}_{x \notin S}-E_{X}(\hat{f}(X))
+$$
+
+The Shapley Values可以理解为所有的特征按照随机的顺序进入一间房间，其中一个特征的Shapley Value就是已经在房间中的特征所导出的预测值，随着新加入的该特征的变动的加权和。
+
+
+The Shapley value是唯一一种方式，同时满足有效率、对称、Dummy和加性：
+
+1. 有效率：所有特征的贡献度求和一定要等于预测值与预测平均值的差。
+
+2. 对称性：两个特征的贡献度应该要一样，如果它们在所有可能的组合当中贡献度都是相等的话，即如果有：
+$$
+\operatorname{val}\left(S \cup\left\{x_{j}\right\}\right)=\operatorname{val}\left(S \cup\left\{x_{k}\right\}\right)
+$$
+对所有$S \subseteq\left\{x_{1}, \ldots, x_{p}\right\} \backslash\left\{x_{j}, x_{k}\right\}$成立，那么有$\phi_{j}=\phi_{k}$。
+
+3. 冗余性：一个特征应该具有0的贡献值，如果它对所有可能的特征组合的边际贡献都为0.
+
+4. 加性：对于一个加性模型，特征的Shapley values也应该符合在各个模型上的Shapley values加和。
+
+### 计算
+原始定义中随着特征数目的增多，计算量会指数级别的增大，因此Strumbelj et al.提出了一种用蒙特卡洛来抽样计算的方法：
+
+$$
+\hat{\phi}_{j}=\frac{1}{M} \sum_{m=1}^{M}\left(\hat{f}\left(x_{+j}^{m}\right)-\hat{f}\left(x_{-j}^{m}\right)\right)
+$$
+
+给定采样次数M，在每一次循环中：
+1. 从数据集X中随机抽样得到一个样本z
+2. 随机选择一个1到p的置换o
+3. 按照o构造两个新的样本：
+
+$$x_{+j}=\left(x_{(1)}, \ldots, x_{(j-1)}, x_{(j)}, z_{(j+1)}, \ldots, z_{(p)}\right)$$
+和
+
+$$
+x_{-j}=\left(x_{(1)}, \ldots, x_{(j-1)}, z_{(j)}, z_{(j+1)}, \ldots, z_{(p)}\right)
+$$
+区别仅仅是第j个特征是原来的特征还是使用z来替换。
+4. 计算边际贡献$\phi_{j}^{m}=\hat{f}\left(x_{+j}\right)-\hat{f}\left(x_{-j}\right)$
+5. 完成上述循环M次后，根据M次结果计算均值得到Shapley value的近似值：$\phi_{j}(x)=\frac{1}{M} \sum_{m=1}^{M} \phi_{j}^{m}$
+
+
 
