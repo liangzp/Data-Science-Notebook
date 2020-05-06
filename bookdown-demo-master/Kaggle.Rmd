@@ -1,4 +1,4 @@
-# Kaggle
+# Kaggle Competitions
 
 ## 2020 M5 Forecasting - Accuracy
 (https://www.kaggle.com/c/m5-forecasting-accuracy)[2020 M5 Forecasting - Accuracy]
