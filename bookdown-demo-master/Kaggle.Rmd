@@ -1,0 +1,17 @@
+# Kaggle
+
+## 2020 M5 Forecasting - Accuracy
+(https://www.kaggle.com/c/m5-forecasting-accuracy)[2020 M5 Forecasting - Accuracy]
+
+### 数据描述
++ calendar.csv(14) - Contains information about the dates on which the products are sold.
++ sales_train_validation.csv(1919) - Contains the historical daily unit sales data per product and store [d_1 - d_1913]
++ sell_prices.csv(4) - Contains information about the price of the products sold per store and date.
++ sales_train_evaluation.csv - Available once month before competition deadline. Will include sales [d_1 - d_1941]
++ sample_submission.csv(29) - The correct format for submissions. Reference the Evaluation tab for more info.
+
+### 目标函数
+The accuracy competition will use the metric: Weighted Root Mean Squared Scaled Error (RMSSE)
+
+
+

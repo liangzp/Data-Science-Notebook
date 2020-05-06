@@ -71,5 +71,6 @@ $$
 4. 计算边际贡献$\phi_{j}^{m}=\hat{f}\left(x_{+j}\right)-\hat{f}\left(x_{-j}\right)$
 5. 完成上述循环M次后，根据M次结果计算均值得到Shapley value的近似值：$\phi_{j}(x)=\frac{1}{M} \sum_{m=1}^{M} \phi_{j}^{m}$
 
+### 具体实现（Shap库）
 
 
